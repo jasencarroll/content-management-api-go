@@ -2,13 +2,16 @@
 package main
 
 import (
-	"cms-backend/models"
 	"cms-backend/routes"
 	"cms-backend/utils"
+	"fmt"
 	"log"
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/joho/godotenv/autoload"
 )
 
@@ -17,6 +20,35 @@ import (
 // @description This is a backend API for a Content Management System (CMS).
 // @host localhost:8080
 // @BasePath /api/v1
+
+func runMigrations() error {
+	// Build database URL from environment variables
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbName := os.Getenv("DB_NAME")
+
+	databaseURL := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		dbUser, dbPassword, dbHost, dbPort, dbName)
+
+	// Create migrate instance with file source and postgres database
+	m, err := migrate.New(
+		"file://migrations",
+		databaseURL)
+	if err != nil {
+		return fmt.Errorf("failed to create migrate instance: %v", err)
+	}
+	defer m.Close()
+
+	// Run migrations
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("failed to run migrations: %v", err)
+	}
+
+	log.Println("Migrations completed successfully")
+	return nil
+}
 
 func main() {
 	// Initialize database connection
@@ -38,12 +70,10 @@ func main() {
 		env = "development" // default to development if ENV is not set
 	}
 
-	// Conditionally run AutoMigrate in development environment
-	if env == "development" {
-		log.Println("Running AutoMigrate...")
-		if err := db.AutoMigrate(&models.Page{}, &models.Post{}, &models.Media{}); err != nil {
-			log.Fatalf("Failed to automigrate database: %v", err)
-		}
+	// Run database migrations
+	log.Println("Running database migrations...")
+	if err := runMigrations(); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
 	// Set Gin mode based on environment
