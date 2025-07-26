@@ -38,92 +38,228 @@ func GetPosts(c *gin.Context) {
 
 // GetPost retrieves a specific post by ID
 func GetPost(c *gin.Context) {
-    // TODO: Get database connection
-    // Get database instance from Gin context
-    
-    // TODO: Handle ID parameter
-    // 1. Get the ID from URL parameter
-      // Example: /api/posts/123
-    
-    // 2. Convert string ID to uint
-
-
-    // TODO: Retrieve post from database
-    // 1. Define post variable and query database
-
-    // 2. Return the post
+	// Get database instance from Gin context
+	db := c.MustGet("db").(*gorm.DB)
+	
+	// Get the ID from URL parameter
+	id := c.Param("id")
+	
+	// Define post variable and query database
+	var post models.Post
+	if err := db.Preload("Media").First(&post, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, utils.HTTPError{
+				Code:    http.StatusNotFound,
+				Message: "Post not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+	
+	// Return the post
+	c.JSON(http.StatusOK, post)
 }
 
 // CreatePost creates a new post
 func CreatePost(c *gin.Context) {
-    // TODO: Get database connection
-    // Get database instance from Gin context
-    
-    // TODO: Parse and validate input
-    // 1. Define post variable to store incoming data
-    
-    // 2. Parse JSON request body into post struct
-
-    // TODO: Validate required fields
-    // Validate required fields
-
-    // TODO: Create post in database
-    // 1. Start database transaction
-    
-    // 2. Create the post
-
-    // 3. Commit transaction
-
-    // 4. Return created post
+	// Get database instance from Gin context
+	db := c.MustGet("db").(*gorm.DB)
+	
+	// Define post variable to store incoming data
+	var post models.Post
+	
+	// Parse JSON request body into post struct
+	if err := c.ShouldBindJSON(&post); err != nil {
+		c.JSON(http.StatusBadRequest, utils.HTTPError{
+			Code:    http.StatusBadRequest,
+			Message: err.Error(),
+		})
+		return
+	}
+	
+	// Validate required fields
+	if post.Title == "" {
+		c.JSON(http.StatusBadRequest, utils.HTTPError{
+			Code:    http.StatusBadRequest,
+			Message: "Title is required",
+		})
+		return
+	}
+	if post.Content == "" {
+		c.JSON(http.StatusBadRequest, utils.HTTPError{
+			Code:    http.StatusBadRequest,
+			Message: "Content is required",
+		})
+		return
+	}
+	
+	// Start database transaction
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+	
+	// Create the post
+	if err := tx.Create(&post).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+	
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+	
+	// Return created post
+	c.JSON(http.StatusCreated, post)
 }
 
 // UpdatePost updates an existing post
 func UpdatePost(c *gin.Context) {
-    // TODO: Get database connection
-    // Get database instance from Gin context
-    
-    // TODO: Parse and validate ID
-    // Get ID from URL parameter
-      // Example: /api/posts/123
-
-    // TODO: Check if post exists
-    // Find existing post
-
-    // TODO: Parse and validate update data
-    // Define variable for update input
-
-    // TODO: Update post fields
-    // Update only the fields that are allowed to be updated
-
-    // TODO: Save updates to database
-    // 1. Start transaction
-    
-    // 2. Save the updated post
-
-    // 3. Commit transaction
-
-    // 4. Return updated post
+	// Get database instance from Gin context
+	db := c.MustGet("db").(*gorm.DB)
+	
+	// Get ID from URL parameter
+	id := c.Param("id")
+	
+	// Find existing post
+	var existingPost models.Post
+	if err := db.First(&existingPost, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, utils.HTTPError{
+				Code:    http.StatusNotFound,
+				Message: "Post not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+	
+	// Define variable for update input
+	var updateData models.Post
+	if err := c.ShouldBindJSON(&updateData); err != nil {
+		c.JSON(http.StatusBadRequest, utils.HTTPError{
+			Code:    http.StatusBadRequest,
+			Message: err.Error(),
+		})
+		return
+	}
+	
+	// Update only the fields that are allowed to be updated
+	if updateData.Title != "" {
+		existingPost.Title = updateData.Title
+	}
+	if updateData.Content != "" {
+		existingPost.Content = updateData.Content
+	}
+	if updateData.Author != "" {
+		existingPost.Author = updateData.Author
+	}
+	
+	// Start transaction
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+	
+	// Save the updated post
+	if err := tx.Save(&existingPost).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+	
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+	
+	// Return updated post
+	c.JSON(http.StatusOK, existingPost)
 }
 
 // DeletePost deletes a post
 func DeletePost(c *gin.Context) {
-    // TODO: Get database connection
-    // Get database instance from Gin context
-    
-    // TODO: Parse and validate ID
-    // Get ID from URL parameter
-	 // Example: /api/posts/123
-
-    // TODO: Check if post exists
-    // Find existing post
-
-    // TODO: Delete post from database
-    // 1. Start transaction
-    
-    // 2. Delete the post
-    // Note: Consider if you want soft delete (recommended) or hard delete
-
-    // 3. Commit transaction
-
-    // 4. Return success message
+	// Get database instance from Gin context
+	db := c.MustGet("db").(*gorm.DB)
+	
+	// Get ID from URL parameter
+	id := c.Param("id")
+	
+	// Find existing post
+	var post models.Post
+	if err := db.First(&post, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, utils.HTTPError{
+				Code:    http.StatusNotFound,
+				Message: "Post not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+	
+	// Start transaction
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+	
+	// Delete the post (soft delete if GORM's DeletedAt is configured, otherwise hard delete)
+	if err := tx.Delete(&post).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+	
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+	
+	// Return success message
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Post deleted successfully",
+	})
 }
