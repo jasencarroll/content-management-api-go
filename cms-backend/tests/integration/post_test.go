@@ -3,6 +3,7 @@ package integration
 import (
 	"cms-backend/models"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -30,20 +31,80 @@ Each test should:
 */
 
 func TestPostIntegration(t *testing.T) {
-    // TODO: Clear Database
-    // - Clear all tables before starting tests
-    
-    // TODO: Create Test Media
-    // - Create media item to use in posts
-    // - Store media ID for later use
-    
-    t.Run("Create Post with Media", func(t *testing.T) {
-		// TODO: Create Post with Media
-    })
+	// Clear Database before starting tests
+	clearTables()
 
-    t.Run("Get Posts with Filter", func(t *testing.T) {
-		// TODO: Get Posts with Filter
-    })
+	// Create Test Media for use in posts
+	mediaID := createTestMedia(t)
+
+	t.Run("Create Post with Media", func(t *testing.T) {
+		// Test creating a post with media relationship
+		body := `{
+			"title": "Test Post with Media",
+			"content": "This is a test post with media attachment",
+			"author": "Test Author",
+			"media": [{"id": ` + fmt.Sprintf("%d", mediaID) + `}]
+		}`
+
+		req := httptest.NewRequest("POST", "/api/v1/posts", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		router := GetTestRouter()
+		router.ServeHTTP(w, req)
+
+		// Verify successful creation
+		if w.Code != http.StatusCreated {
+			t.Errorf("Expected status %d, got %d. Body: %s", http.StatusCreated, w.Code, w.Body.String())
+			return
+		}
+
+		// Parse response
+		var response models.Post
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to parse response: %v", err)
+		}
+
+		// Verify post data
+		if response.Title != "Test Post with Media" {
+			t.Errorf("Expected title 'Test Post with Media', got '%s'", response.Title)
+		}
+		if response.Author != "Test Author" {
+			t.Errorf("Expected author 'Test Author', got '%s'", response.Author)
+		}
+		if len(response.Media) != 1 {
+			t.Errorf("Expected 1 media item, got %d", len(response.Media))
+		}
+	})
+
+	t.Run("Get Posts with Filter", func(t *testing.T) {
+		// Test retrieving posts with author filter
+		req := httptest.NewRequest("GET", "/api/v1/posts?author=Test+Author", nil)
+		w := httptest.NewRecorder()
+
+		router := GetTestRouter()
+		router.ServeHTTP(w, req)
+
+		// Verify successful retrieval
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status %d, got %d. Body: %s", http.StatusOK, w.Code, w.Body.String())
+			return
+		}
+
+		// Parse response
+		var posts []models.Post
+		if err := json.Unmarshal(w.Body.Bytes(), &posts); err != nil {
+			t.Fatalf("Failed to parse response: %v", err)
+		}
+
+		// Verify filtered results
+		if len(posts) != 1 {
+			t.Errorf("Expected 1 post, got %d", len(posts))
+		}
+		if len(posts) > 0 && posts[0].Author != "Test Author" {
+			t.Errorf("Expected author 'Test Author', got '%s'", posts[0].Author)
+		}
+	})
 }
 
 // Helper function to create test media
@@ -56,6 +117,8 @@ func createTestMedia(t *testing.T) uint {
 	req := httptest.NewRequest("POST", "/api/v1/media", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
+
+	router := GetTestRouter()
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusCreated {
