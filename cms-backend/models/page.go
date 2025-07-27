@@ -32,10 +32,10 @@ type Page struct {
 	// TODO: Add CreatedAt field using time.Time with:
 	// - gorm tag for automatic timestamp on creation
 	// - json tag for serialization
-	Createdat time.Time `gorm:"autoCreateTime" json:"created_at"`
+	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 
 	// TODO: Add UpdatedAt field using time.Time with:
 	// - gorm tag for automatic timestamp on updates
 	// - json tag for serialization
-	UpodatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }

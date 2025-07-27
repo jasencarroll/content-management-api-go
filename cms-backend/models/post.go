@@ -38,12 +38,12 @@ type Post struct {
 	// TODO: Add CreatedAt field using time.Time with:
 	// - gorm tag for automatic timestamp on creation
 	// - json tag for serialization
-	Createdat time.Time `gorm:"autoCreateTime" json:"created_at"`
+	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 
 	// TODO: Add UpdatedAt field using time.Time with:
 	// - gorm tag for automatic timestamp on updates
 	// - json tag for serialization
-	UpodatedAt time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 
 	// TODO: Add Media field as []Media with:
 	// - gorm tag for many-to-many relationship (specify junction table name: post_media)

@@ -1,85 +1,266 @@
 package controllers
 
 import (
-	"github.com/gin-gonic/gin"
-)
+	"cms-backend/models"
+	"cms-backend/utils"
+	"net/http"
 
-// TODO: Import required packages:
-// - models package for Page struct
-// - utils package for error handling
-// - net/http for status codes
-// - strconv for string to uint conversion
-// - gin-gonic/gin for web framework
-// - gorm.io/gorm for database operations
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
 
 // GetPages retrieves all pages
 func GetPages(c *gin.Context) {
-    // TODO: Get database instance from context
+	// Get database instance from context
+	db := c.MustGet("db").(*gorm.DB)
 
-    // TODO: Declare pages slice variable
+	// Declare pages slice variable
+	var pages []models.Page
 
-    // TODO: Query all pages from database
+	// Query all pages from database
+	title := c.Query("title")
+	author := c.Query("author")
 
-    // TODO: Handle potential database errors
+	query := db
+	if title != "" {
+		query = query.Where("title ILIKE ?", "%"+title+"%")
+	}
+	if author != "" {
+		query = query.Where("author = ?", author)
+	}
 
-    // TODO: Return success response with pages
+	// Handle potential database errors
+	if err := query.Find(&pages).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	// Return success response with pages
+	c.JSON(http.StatusOK, pages)
 }
 
 // GetPage retrieves a specific page by ID
 func GetPage(c *gin.Context) {
-    // TODO: Get database instance from context
-    
-    // TODO: Get ID parameter and convert to uint
-    
-    // TODO: Declare page variable
-    
-    // TODO: Query page from database
-    
-    // TODO: Handle potential database errors
-    
-    // TODO: Return success response with page
+	// Get database instance from context
+	db := c.MustGet("db").(*gorm.DB)
+
+	// Get ID parameter and convert to uint
+	id := c.Param("id")
+
+	// Declare page variable
+	var page models.Page
+
+	// Query page from database
+	if err := db.First(&page, id).Error; err != nil {
+		// Handle potential database errors
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, utils.HTTPError{
+				Code:    http.StatusNotFound,
+				Message: "Page not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	// Return success response with page
+	c.JSON(http.StatusOK, page)
 }
+
 // CreatePage creates a new page
 func CreatePage(c *gin.Context) {
-	// TODO: Get database instance from context
+	// Get database instance from context
+	db := c.MustGet("db").(*gorm.DB)
 
-	// TODO: Declare page variable
+	// Declare page variable
+	var page models.Page
 
-    // TODO: Bind JSON request body:
+	// Bind JSON request body
+	if err := c.ShouldBindJSON(&page); err != nil {
+		c.JSON(http.StatusBadRequest, utils.HTTPError{
+			Code:    http.StatusBadRequest,
+			Message: err.Error(),
+		})
+		return
+	}
 
-    // TODO: Start transaction:
-    
-    // TODO: Create page in database:
-    
-    // TODO: Commit transaction and return response:
+	// Validate required fields
+	if page.Title == "" {
+		c.JSON(http.StatusBadRequest, utils.HTTPError{
+			Code:    http.StatusBadRequest,
+			Message: "Title is required",
+		})
+		return
+	}
+	if page.Content == "" {
+		c.JSON(http.StatusBadRequest, utils.HTTPError{
+			Code:    http.StatusBadRequest,
+			Message: "Content is required",
+		})
+		return
+	}
+
+	// Start transaction
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Create page in database
+	if err := tx.Create(&page).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	// Commit transaction and return response
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, page)
 }
 
 // UpdatePage updates an existing page by ID
 func UpdatePage(c *gin.Context) {
-    // TODO: Get database instance from context
-    
-    // TODO: Convert string ID to uint:
-    
-    // TODO: Find existing page:
+	// Get database instance from context
+	db := c.MustGet("db").(*gorm.DB)
 
-    // TODO: Bind JSON update data:
+	// Convert string ID to uint
+	id := c.Param("id")
 
-    // TODO: Update page fields:
+	// Find existing page
+	var existingPage models.Page
+	if err := db.First(&existingPage, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, utils.HTTPError{
+				Code:    http.StatusNotFound,
+				Message: "Page not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
 
-    // TODO: Start transaction and save:
+	// Bind JSON update data
+	var updateData models.Page
+	if err := c.ShouldBindJSON(&updateData); err != nil {
+		c.JSON(http.StatusBadRequest, utils.HTTPError{
+			Code:    http.StatusBadRequest,
+			Message: err.Error(),
+		})
+		return
+	}
 
-    // TODO: Return success response:
+	// Update page fields
+	if updateData.Title != "" {
+		existingPage.Title = updateData.Title
+	}
+	if updateData.Content != "" {
+		existingPage.Content = updateData.Content
+	}
+
+	// Start transaction and save
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Save(&existingPage).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	// Return success response
+	c.JSON(http.StatusOK, existingPage)
 }
 
 // DeletePage deletes a page by ID
 func DeletePage(c *gin.Context) {
-	// TODO: Get database instance from context
-    
-    // TODO: Convert string ID to uint:
+	// Get database instance from context
+	db := c.MustGet("db").(*gorm.DB)
 
-    // TODO: Check if page exists:
+	// Convert string ID to uint
+	id := c.Param("id")
 
-    // TODO: Start transaction and delete:
+	// Check if page exists
+	var page models.Page
+	if err := db.First(&page, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, utils.HTTPError{
+				Code:    http.StatusNotFound,
+				Message: "Page not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
 
-    // TODO: Return success response:
+	// Start transaction and delete
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Delete(&page).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, utils.HTTPError{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	// Return success response
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Page deleted successfully",
+	})
 }
